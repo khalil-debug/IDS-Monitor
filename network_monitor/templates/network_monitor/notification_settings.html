@@ -1,0 +1,414 @@
+{% extends 'network_monitor/base.html' %}
+{% load form_tags %}
+
+{% block title %}Notification Settings - IDS{% endblock %}
+
+{% block page_title %}Notification Settings{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>Configure Notification Channels</h5>
+                <div>
+                    <a href="{% url 'network_monitor:notification_logs' %}" class="btn btn-info">
+                        <i class="bi bi-bell"></i> View Notification Logs
+                    </a>
+                    <a href="{% url 'network_monitor:notification_diagnostic' %}" class="btn btn-warning ms-2">
+                        <i class="bi bi-search"></i> Diagnostics
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <form method="post" class="needs-validation">
+                    {% csrf_token %}
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">General Settings</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Active Notification Channels</label>
+                                        <div class="d-flex flex-column">
+                                            {{ form.notification_channels }}
+                                        </div>
+                                        <div class="form-text">Select which notification channels to use</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Severity Levels to Notify</label>
+                                        <div class="d-flex flex-column">
+                                            {{ form.notify_severity_levels }}
+                                        </div>
+                                        <div class="form-text">Select which severity levels trigger notifications</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="id_server_url" class="form-label">Server URL</label>
+                                        {{ form.server_url|add_class:"form-control" }}
+                                        <div class="form-text">{{ form.server_url.help_text }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">Throttling Settings</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="id_max_notifications_per_hour" class="form-label">Max Notifications Per Hour</label>
+                                        {{ form.max_notifications_per_hour|add_class:"form-control" }}
+                                        <div class="form-text">{{ form.max_notifications_per_hour.help_text }}</div>
+                                    </div>
+                                    
+                                    <div class="mb-3 form-check">
+                                        {{ form.throttle_similar_alerts|add_class:"form-check-input" }}
+                                        <label class="form-check-label" for="id_throttle_similar_alerts">
+                                            {{ form.throttle_similar_alerts.label }}
+                                        </label>
+                                        <div class="form-text">Group similar alerts to reduce notification volume</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="id_similar_alert_window" class="form-label">Similar Alert Window (seconds)</label>
+                                        {{ form.similar_alert_window|add_class:"form-control" }}
+                                        <div class="form-text">{{ form.similar_alert_window.help_text }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Telegram Settings -->
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center bg-success text-white">
+                            <h5 class="mb-0">Telegram Settings</h5>
+                            {% if telegram_configured %}
+                            <form method="post" action="{% url 'network_monitor:test_notification' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="channel" value="telegram">
+                                <button type="submit" class="btn btn-light btn-sm">
+                                    <i class="bi bi-send"></i> Test Notification
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check form-switch mb-3">
+                                {{ form.telegram_enabled|add_class:"form-check-input" }}
+                                <label class="form-check-label" for="id_telegram_enabled">
+                                    {{ form.telegram_enabled.label }}
+                                </label>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="id_telegram_bot_token" class="form-label">Bot Token</label>
+                                        {{ form.telegram_bot_token|add_class:"form-control" }}
+                                        <div class="form-text">{{ form.telegram_bot_token.help_text }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="id_telegram_chat_id" class="form-label">Chat ID</label>
+                                        {{ form.telegram_chat_id|add_class:"form-control" }}
+                                        <div class="form-text">{{ form.telegram_chat_id.help_text }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex mt-2">
+                                <button type="button" id="directTelegramTestBtn" class="btn btn-warning">
+                                    <i class="bi bi-send"></i> Test & Configure Now
+                                </button>
+                                <div id="telegramTestStatus" class="ms-3 d-none">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Testing...</span>
+                                    </div>
+                                    <span class="ms-2">Testing connection...</span>
+                                </div>
+                            </div>
+                            
+                            <div id="telegramTestResult" class="mt-2 d-none">
+                                <div id="telegramTestSuccess" class="alert alert-success d-none">
+                                    <i class="bi bi-check-circle-fill"></i> 
+                                    <strong>Success!</strong> Telegram is configured and working. Notifications will be sent immediately.
+                                </div>
+                                <div id="telegramTestError" class="alert alert-danger d-none">
+                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                    <strong>Error:</strong> <span id="telegramErrorMessage"></span>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <h6><i class="bi bi-info-circle"></i> How to set up Telegram notifications:</h6>
+                                <ol>
+                                    <li>Talk to <a href="https://t.me/BotFather" target="_blank">@BotFather</a> on Telegram</li>
+                                    <li>Create a new bot with the command: /newbot</li>
+                                    <li>Copy the bot token and paste it above</li>
+                                    <li>Start a conversation with your bot</li>
+                                    <li>Use <a href="https://t.me/getidsbot" target="_blank">@getidsbot</a> to get your chat ID</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Email Settings -->
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
+                            <h5 class="mb-0">Email Settings</h5>
+                            {% if email_configured %}
+                            <form method="post" action="{% url 'network_monitor:test_notification' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="channel" value="email">
+                                <button type="submit" class="btn btn-light btn-sm">
+                                    <i class="bi bi-envelope"></i> Test Email
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check form-switch mb-3">
+                                {{ form.email_enabled|add_class:"form-check-input" }}
+                                <label class="form-check-label" for="id_email_enabled">
+                                    {{ form.email_enabled.label }}
+                                </label>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="id_email_host" class="form-label">SMTP Server</label>
+                                        {{ form.email_host|add_class:"form-control" }}
+                                        <div class="form-text">{{ form.email_host.help_text }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="id_email_port" class="form-label">Port</label>
+                                        {{ form.email_port|add_class:"form-control" }}
+                                        <div class="form-text">{{ form.email_port.help_text }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3 form-check mt-4">
+                                        {{ form.email_use_tls|add_class:"form-check-input" }}
+                                        <label class="form-check-label" for="id_email_use_tls">
+                                            {{ form.email_use_tls.label }}
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="id_email_host_user" class="form-label">Username</label>
+                                        {{ form.email_host_user|add_class:"form-control" }}
+                                        <div class="form-text">{{ form.email_host_user.help_text }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="id_email_host_password" class="form-label">Password</label>
+                                        {{ form.email_host_password|add_class:"form-control" }}
+                                        <div class="form-text">{{ form.email_host_password.help_text }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="id_email_recipients" class="form-label">Recipients</label>
+                                {{ form.email_recipients|add_class:"form-control" }}
+                                <div class="form-text">{{ form.email_recipients.help_text }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Webhook Settings -->
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center bg-secondary text-white">
+                            <h5 class="mb-0">Webhook Settings</h5>
+                            {% if webhook_configured %}
+                            <form method="post" action="{% url 'network_monitor:test_notification' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="channel" value="webhook">
+                                <button type="submit" class="btn btn-light btn-sm">
+                                    <i class="bi bi-link"></i> Test Webhook
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check form-switch mb-3">
+                                {{ form.webhook_enabled|add_class:"form-check-input" }}
+                                <label class="form-check-label" for="id_webhook_enabled">
+                                    {{ form.webhook_enabled.label }}
+                                </label>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="id_webhook_url" class="form-label">Webhook URL</label>
+                                {{ form.webhook_url|add_class:"form-control" }}
+                                <div class="form-text">{{ form.webhook_url.help_text }}</div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <h6><i class="bi bi-info-circle"></i> About Webhooks:</h6>
+                                <p>
+                                    Webhook notifications will send JSON data to the specified URL.
+                                    The server receiving the webhook should be able to process JSON payloads.
+                                </p>
+                                <p>
+                                    Example integrations: Slack, Discord, custom endpoints, etc.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Save Notification Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle visibility of settings based on enabled status
+    document.addEventListener('DOMContentLoaded', function() {
+        // Telegram
+        document.getElementById('id_telegram_enabled').addEventListener('change', function() {
+            const telegramFields = document.querySelectorAll('#id_telegram_bot_token, #id_telegram_chat_id');
+            telegramFields.forEach(field => {
+                field.disabled = !this.checked;
+            });
+        });
+        
+        // Email
+        document.getElementById('id_email_enabled').addEventListener('change', function() {
+            const emailFields = document.querySelectorAll('#id_email_host, #id_email_port, #id_email_host_user, #id_email_host_password, #id_email_use_tls, #id_email_recipients');
+            emailFields.forEach(field => {
+                field.disabled = !this.checked;
+            });
+        });
+        
+        // Webhook
+        document.getElementById('id_webhook_enabled').addEventListener('change', function() {
+            const webhookFields = document.querySelectorAll('#id_webhook_url');
+            webhookFields.forEach(field => {
+                field.disabled = !this.checked;
+            });
+        });
+        
+        // Trigger initial state
+        document.getElementById('id_telegram_enabled').dispatchEvent(new Event('change'));
+        document.getElementById('id_email_enabled').dispatchEvent(new Event('change'));
+        document.getElementById('id_webhook_enabled').dispatchEvent(new Event('change'));
+    });
+
+    // Direct Telegram test implementation
+    document.getElementById('directTelegramTestBtn').addEventListener('click', function() {
+        const telegramToken = document.getElementById('id_telegram_bot_token').value.trim();
+        const telegramChatId = document.getElementById('id_telegram_chat_id').value.trim();
+        
+        if (!telegramToken || !telegramChatId) {
+            alert('Please enter both Telegram Bot Token and Chat ID');
+            return;
+        }
+        
+        // Show status
+        document.getElementById('telegramTestStatus').classList.remove('d-none');
+        document.getElementById('telegramTestResult').classList.add('d-none');
+        document.getElementById('telegramTestSuccess').classList.add('d-none');
+        document.getElementById('telegramTestError').classList.add('d-none');
+        
+        // Get CSRF token for the request
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        // Prepare form data
+        const formData = new FormData();
+        formData.append('token', telegramToken);
+        formData.append('chat_id', telegramChatId);
+        
+        // Send AJAX request
+        fetch('{% url "network_monitor:direct_telegram_test" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Hide status spinner
+            document.getElementById('telegramTestStatus').classList.add('d-none');
+            document.getElementById('telegramTestResult').classList.remove('d-none');
+            
+            if (data.success) {
+                // Show success message
+                document.getElementById('telegramTestSuccess').classList.remove('d-none');
+                
+                // If the chat ID was fixed, update the input field
+                if (data.chat_id_fixed) {
+                    document.getElementById('id_telegram_chat_id').value = data.correct_chat_id;
+                }
+                
+                // Enable the telegram checkbox if it's not already
+                document.getElementById('id_telegram_enabled').checked = true;
+                
+                // If settings were saved, refresh the page after 2 seconds
+                if (data.settings_saved) {
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            } else {
+                // Show error message
+                document.getElementById('telegramTestError').classList.remove('d-none');
+                let errorMsg = 'Unknown error';
+                
+                if (data.errors && data.errors.length > 0) {
+                    errorMsg = data.errors.join('. ');
+                }
+                
+                if (data.chat_id_error) {
+                    errorMsg += ' ' + data.chat_id_error;
+                    if (data.chat_id_help) {
+                        errorMsg += ' ' + data.chat_id_help;
+                    }
+                } else if (data.token_error) {
+                    errorMsg += ' ' + data.token_error;
+                    if (data.token_help) {
+                        errorMsg += ' ' + data.token_help;
+                    }
+                }
+                
+                document.getElementById('telegramErrorMessage').textContent = errorMsg;
+            }
+        })
+        .catch(error => {
+            // Hide status spinner
+            document.getElementById('telegramTestStatus').classList.add('d-none');
+            document.getElementById('telegramTestResult').classList.remove('d-none');
+            
+            // Show error message
+            document.getElementById('telegramTestError').classList.remove('d-none');
+            document.getElementById('telegramErrorMessage').textContent = 'Network error: ' + error.message;
+        });
+    });
+</script>
+{% endblock %} 

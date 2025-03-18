@@ -1,0 +1,13 @@
+.env
+.env.local
+.env.production
+*.log
+/reports
+/venv
+/migrations
+*/__pycache__/*
+*/**/__pycache__/*
+Cahier des charges.md
+db.sqlite3
+/local_storage/
+/logs/

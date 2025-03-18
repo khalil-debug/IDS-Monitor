@@ -1,0 +1,165 @@
+{% extends 'network_monitor/base.html' %}
+{% load form_tags %}
+
+{% block title %}Monitoring Agents - IDS{% endblock %}
+
+{% block page_title %}Monitoring Agents{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title">Total Agents</h5>
+                <h2 class="display-4">{{ total_agents }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">Online</h5>
+                <h2 class="display-4">{{ online_agents }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <h5 class="card-title">Offline</h5>
+                <h2 class="display-4">{{ offline_agents }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-secondary text-white">
+            <div class="card-body">
+                <h5 class="card-title">Disabled</h5>
+                <h2 class="display-4">{{ disabled_agents }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <div class="row">
+            <div class="col-md-8">
+                <h5>Agent Filter</h5>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'network_monitor:agent_list' %}" class="btn btn-sm btn-outline-secondary">Clear Filters</a>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label for="status" class="form-label">Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="platform" class="form-label">Platform</label>
+                <select name="platform" id="platform" class="form-select">
+                    <option value="">All Platforms</option>
+                    {% for value, label in platform_choices %}
+                    <option value="{{ value }}" {% if request.GET.platform == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="search" class="form-label">Search</label>
+                <input type="text" name="search" id="search" class="form-control" placeholder="Name, IP or hostname" value="{{ request.GET.search }}">
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="{% url 'network_monitor:agent_create' %}" class="btn btn-success float-end">
+                    <i class="bi bi-plus-circle"></i> Create New Agent
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Agent List</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Platform</th>
+                        <th>IP Address</th>
+                        <th>Hostname</th>
+                        <th>Last Seen</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for agent in agents %}
+                    <tr>
+                        <td>{{ agent.name }}</td>
+                        <td>
+                            {% if agent.status == 'online' %}
+                            <span class="badge bg-success">Online</span>
+                            {% elif agent.status == 'offline' %}
+                            <span class="badge bg-warning text-dark">Offline</span>
+                            {% elif agent.status == 'pending' %}
+                            <span class="badge bg-info">Pending</span>
+                            {% elif agent.status == 'disabled' %}
+                            <span class="badge bg-secondary">Disabled</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ agent.get_platform_display }}</td>
+                        <td>{{ agent.endpoint_ip|default:"N/A" }}</td>
+                        <td>{{ agent.endpoint_hostname|default:"N/A" }}</td>
+                        <td>
+                            {% if agent.last_seen %}
+                            {{ agent.last_seen|timesince }} ago
+                            {% else %}
+                            Never
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'network_monitor:agent_detail' agent.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                                <a href="{% url 'network_monitor:agent_configure' agent.id %}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-gear"></i> Configure
+                                </a>
+                                <a href="{% url 'network_monitor:agent_delete' agent.id %}" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i> Delete
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center">No agents found matching the criteria</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Refresh agent status every 60 seconds
+    setInterval(function() {
+        location.reload();
+    }, 60000);
+</script>
+{% endblock %} 

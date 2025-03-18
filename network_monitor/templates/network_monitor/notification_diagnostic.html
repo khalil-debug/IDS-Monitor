@@ -1,0 +1,446 @@
+{% extends 'network_monitor/base.html' %}
+
+{% block title %}Notification Diagnostics - IDS{% endblock %}
+
+{% block page_title %}Notification Diagnostics{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>Notification System Diagnostics</h5>
+                <div>
+                    <a href="{% url 'network_monitor:notification_settings' %}" class="btn btn-primary">
+                        <i class="bi bi-gear"></i> Back to Settings
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> 
+                    This page provides diagnostic information about your notification system.
+                    Use this information to troubleshoot notification issues.
+                </div>
+                
+                <!-- System Information -->
+                <div class="card mb-4">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">System Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Python Version:</strong> {{ diagnostic_info.version.python }}</p>
+                                <p><strong>Django Version:</strong> {{ diagnostic_info.version.django }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Telegram Configuration -->
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Telegram Configuration</h5>
+                        {% if diagnostic_info.telegram.enabled and diagnostic_info.telegram.token_set and diagnostic_info.telegram.chat_id_set %}
+                        <div>
+                            <form method="post" action="{% url 'network_monitor:test_notification' %}" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="channel" value="telegram">
+                                <button type="submit" class="btn btn-light btn-sm">
+                                    <i class="bi bi-send"></i> Test Notification
+                                </button>
+                            </form>
+                            
+                            <button type="button" class="btn btn-warning btn-sm ms-2" id="directTelegramTestBtn">
+                                <i class="bi bi-lightning"></i> Direct Test
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <tbody>
+                                    <tr>
+                                        <th style="width: 30%">Enabled in Settings</th>
+                                        <td>
+                                            {% if diagnostic_info.telegram.enabled %}
+                                            <span class="badge bg-success">Enabled</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Disabled</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Bot Token Set</th>
+                                        <td>
+                                            {% if diagnostic_info.telegram.token_set %}
+                                            <span class="badge bg-success">Set</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Not Set</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Chat ID Set</th>
+                                        <td>
+                                            {% if diagnostic_info.telegram.chat_id_set %}
+                                            <span class="badge bg-success">Set</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Not Set</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Token from Environment</th>
+                                        <td>
+                                            {% if diagnostic_info.telegram.token_from_env %}
+                                            <span class="badge bg-success">Yes</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">No</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Active in Service</th>
+                                        <td>
+                                            {% if diagnostic_info.notification_service.telegram_enabled %}
+                                            <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {% if not diagnostic_info.notification_service.telegram_enabled %}
+                        <div class="alert alert-warning mt-3">
+                            <h6><i class="bi bi-exclamation-triangle"></i> Troubleshooting:</h6>
+                            <ol>
+                                <li>Make sure <strong>TELEGRAM_ENABLED</strong> is set to True in settings</li>
+                                <li>Check that both <strong>TELEGRAM_BOT_TOKEN</strong> and <strong>TELEGRAM_CHAT_ID</strong> are set correctly</li>
+                                <li>Verify that you have started a chat with your bot in Telegram</li>
+                                <li>Confirm that your bot token is valid by testing with the direct test button</li>
+                                <li>Check if your bot has the necessary permissions</li>
+                            </ol>
+                            <p><strong>Resources:</strong></p>
+                            <ul>
+                                <li><a href="https://core.telegram.org/bots#how-do-i-create-a-bot" target="_blank">Telegram Bot Documentation</a></li>
+                                <li><a href="https://t.me/BotFather" target="_blank">@BotFather</a> - Create and manage bots</li>
+                                <li><a href="https://t.me/getidsbot" target="_blank">@getidsbot</a> - Get your chat ID</li>
+                            </ul>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Direct Telegram Test Results -->
+                        <div id="directTestResults" class="alert alert-info mt-3" style="display:none;">
+                            <h6><i class="bi bi-info-circle"></i> Direct Test Results:</h6>
+                            <div id="testOutput">Running test...</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Email Settings -->
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Email Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <tbody>
+                                    <tr>
+                                        <th style="width: 30%">Enabled in Settings</th>
+                                        <td>
+                                            {% if diagnostic_info.email.enabled %}
+                                            <span class="badge bg-success">Enabled</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Disabled</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>SMTP Server</th>
+                                        <td>
+                                            {% if diagnostic_info.email.host %}
+                                            <span class="badge bg-success">Set: {{ diagnostic_info.email.host }}</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Not Set</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>SMTP Port</th>
+                                        <td>
+                                            {% if diagnostic_info.email.port %}
+                                            <span class="badge bg-success">Set: {{ diagnostic_info.email.port }}</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Not Set</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>SMTP User</th>
+                                        <td>
+                                            {% if diagnostic_info.email.user %}
+                                            <span class="badge bg-success">Set</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Not Set</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Recipients</th>
+                                        <td>
+                                            {% if diagnostic_info.email.recipients %}
+                                            <span class="badge bg-success">Set ({{ diagnostic_info.email.recipients|length }})</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Not Set</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Active in Service</th>
+                                        <td>
+                                            {% if diagnostic_info.notification_service.email_enabled %}
+                                            <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Webhook Settings -->
+                <div class="card mb-4">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">Webhook Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <tbody>
+                                    <tr>
+                                        <th style="width: 30%">Enabled in Settings</th>
+                                        <td>
+                                            {% if diagnostic_info.webhook.enabled %}
+                                            <span class="badge bg-success">Enabled</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Disabled</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Webhook URL</th>
+                                        <td>
+                                            {% if diagnostic_info.webhook.url %}
+                                            <span class="badge bg-success">Set</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Not Set</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Active in Service</th>
+                                        <td>
+                                            {% if diagnostic_info.notification_service.webhook_enabled %}
+                                            <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Active Notification Channels -->
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Active Notification Channels</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Channel</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Telegram</td>
+                                        <td>
+                                            {% if 'telegram' in diagnostic_info.notification_service.channels %}
+                                            <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Email</td>
+                                        <td>
+                                            {% if 'email' in diagnostic_info.notification_service.channels %}
+                                            <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Webhook</td>
+                                        <td>
+                                            {% if 'webhook' in diagnostic_info.notification_service.channels %}
+                                            <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {% if not diagnostic_info.notification_service.channels %}
+                        <div class="alert alert-danger mt-3">
+                            <h6><i class="bi bi-exclamation-triangle"></i> Warning:</h6>
+                            <p>No notification channels are currently active. Check your notification settings.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const directTestBtn = document.getElementById('directTelegramTestBtn');
+        if (directTestBtn) {
+            directTestBtn.addEventListener('click', function() {
+                // Show the results container and set loading state
+                const resultsContainer = document.getElementById('directTestResults');
+                const testOutput = document.getElementById('testOutput');
+                resultsContainer.style.display = 'block';
+                resultsContainer.className = 'alert alert-info mt-3';
+                testOutput.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Running direct Telegram test...</div>';
+                
+                // Create form data for the POST request
+                const formData = new FormData();
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                
+                // Make the AJAX request
+                fetch('{% url "network_monitor:direct_telegram_test" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Format the results
+                    let resultHTML = '';
+                    
+                    if (data.success) {
+                        resultsContainer.className = 'alert alert-success mt-3';
+                        resultHTML += '<h6><i class="bi bi-check-circle"></i> Success!</h6>';
+                        resultHTML += '<p>The direct Telegram test was successful.</p>';
+                        
+                        if (data.chat_id_fixed && data.correct_chat_id) {
+                            resultHTML += '<div class="alert alert-warning">';
+                            resultHTML += '<h6><i class="bi bi-exclamation-triangle"></i> Important!</h6>';
+                            resultHTML += '<p>' + data.chat_id_note + '</p>';
+                            resultHTML += '<p>You need to update your notification settings with this value.</p>';
+                            resultHTML += '</div>';
+                        }
+                        
+                        resultHTML += '<p>Message ID: ' + data.message_id + '</p>';
+                        resultHTML += '<p class="mb-0">This confirms your Telegram bot token and chat ID are correct.</p>';
+                    } else {
+                        resultsContainer.className = 'alert alert-danger mt-3';
+                        resultHTML += '<h6><i class="bi bi-x-circle"></i> Test Failed</h6>';
+                        
+                        // Specific chat ID formatting help
+                        if (data.chat_id_format_note) {
+                            resultHTML += '<div class="alert alert-warning">';
+                            resultHTML += '<h6><i class="bi bi-info-circle"></i> Chat ID Format:</h6>';
+                            resultHTML += '<p>' + data.chat_id_format_note + '</p>';
+                            resultHTML += '</div>';
+                        }
+                        
+                        // Specific error guidance
+                        if (data.chat_id_error) {
+                            resultHTML += '<div class="alert alert-warning">';
+                            resultHTML += '<h6><i class="bi bi-exclamation-triangle"></i> Chat ID Issue:</h6>';
+                            resultHTML += '<p>' + data.chat_id_error + '</p>';
+                            if (data.chat_id_help) {
+                                resultHTML += '<p>' + data.chat_id_help + '</p>';
+                            }
+                            resultHTML += '</div>';
+                        }
+                        
+                        if (data.token_error) {
+                            resultHTML += '<div class="alert alert-warning">';
+                            resultHTML += '<h6><i class="bi bi-exclamation-triangle"></i> Token Issue:</h6>';
+                            resultHTML += '<p>' + data.token_error + '</p>';
+                            if (data.token_help) {
+                                resultHTML += '<p>' + data.token_help + '</p>';
+                            }
+                            resultHTML += '</div>';
+                        }
+                        
+                        // Suggestion for group chats
+                        if (data.suggestion) {
+                            resultHTML += '<div class="alert alert-info">';
+                            resultHTML += '<h6><i class="bi bi-lightbulb"></i> Suggestion:</h6>';
+                            resultHTML += '<p>' + data.suggestion + '</p>';
+                            resultHTML += '<p>Try updating your chat ID to <strong>-' + data.request_info.chat_id + '</strong> in the notification settings.</p>';
+                            resultHTML += '</div>';
+                        }
+                        
+                        if (data.errors && data.errors.length > 0) {
+                            resultHTML += '<p>The following errors occurred:</p>';
+                            resultHTML += '<ul>';
+                            data.errors.forEach(error => {
+                                resultHTML += '<li>' + error + '</li>';
+                            });
+                            resultHTML += '</ul>';
+                        }
+                        
+                        if (data.response) {
+                            resultHTML += '<p>API Response:</p>';
+                            resultHTML += '<ul>';
+                            resultHTML += '<li>Status code: ' + data.response.status_code + '</li>';
+                            resultHTML += '<li>Response: ' + data.response.text + '</li>';
+                            resultHTML += '</ul>';
+                        }
+                        
+                        resultHTML += '<p class="mb-0">Please check your Telegram settings.</p>';
+                    }
+                    
+                    testOutput.innerHTML = resultHTML;
+                })
+                .catch(error => {
+                    resultsContainer.className = 'alert alert-danger mt-3';
+                    testOutput.innerHTML = '<h6><i class="bi bi-x-circle"></i> Error</h6><p>An error occurred while running the test: ' + error.message + '</p>';
+                });
+            });
+        }
+    });
+</script>
+{% endblock %} 

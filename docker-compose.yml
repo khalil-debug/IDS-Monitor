@@ -1,0 +1,124 @@
+services:
+  db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-ids_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password}
+      - POSTGRES_DB=${POSTGRES_DB:-ids_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - ids-network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ids_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - ids-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    command: /code/start_docker.sh web
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - rabbitmq
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-ids_db}
+      - POSTGRES_USER=${POSTGRES_USER:-ids_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - DATABASE_URL=postgres://${POSTGRES_USER:-ids_user}:${POSTGRES_PASSWORD:-secure_password}@db:5432/${POSTGRES_DB:-ids_db}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SECRET_KEY=${SECRET_KEY}
+      - CELERY_BROKER_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672//
+      - TZ=UTC
+      - DOCKER_CONTAINER=true
+      - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin}
+      - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-admin@admin.tn}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-admin}
+    networks:
+      - ids-network
+    restart: always
+
+  celery:
+    build: .
+    command: /code/start_docker.sh celery
+    volumes:
+      - .:/code
+    depends_on:
+      - db
+      - rabbitmq
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-ids_db}
+      - POSTGRES_USER=${POSTGRES_USER:-ids_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - DATABASE_URL=postgres://${POSTGRES_USER:-ids_user}:${POSTGRES_PASSWORD:-secure_password}@db:5432/${POSTGRES_DB:-ids_db}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - SECRET_KEY=${SECRET_KEY}
+      - CELERY_BROKER_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672//
+      - TZ=UTC
+      - DOCKER_CONTAINER=true
+    networks:
+      - ids-network
+    restart: always
+
+  celery-beat:
+    build: .
+    command: /code/start_docker.sh beat
+    volumes:
+      - .:/code
+    depends_on:
+      - db
+      - rabbitmq
+      - celery
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-ids_db}
+      - POSTGRES_USER=${POSTGRES_USER:-ids_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - DATABASE_URL=postgres://${POSTGRES_USER:-ids_user}:${POSTGRES_PASSWORD:-secure_password}@db:5432/${POSTGRES_DB:-ids_db}
+      - SECRET_KEY=${SECRET_KEY}
+      - CELERY_BROKER_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672//
+      - TZ=UTC
+      - DOCKER_CONTAINER=true
+    networks:
+      - ids-network
+    restart: always
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  ids-network:
+    driver: bridge

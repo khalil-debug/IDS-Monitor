@@ -1,0 +1,269 @@
+{% extends 'network_monitor/base.html' %}
+{% load form_tags %}
+
+{% block title %}{% if is_create %}Create New Rule{% else %}Edit Rule: {{ rule.name }}{% endif %} - IDS{% endblock %}
+
+{% block page_title %}{% if is_create %}Create New Detection Rule{% else %}Edit Rule: {{ rule.name }}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>{% if is_create %}Rule Details{% else %}Edit Rule{% endif %}</h5>
+                <div>
+                    {% if is_create %}
+                    <a href="{% url 'network_monitor:rule_list' %}" class="btn btn-sm btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to List
+                    </a>
+                    {% else %}
+                    <a href="{% url 'network_monitor:rule_detail' rule.id %}" class="btn btn-sm btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Details
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <form method="post" class="needs-validation">
+                    {% csrf_token %}
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="id_name" class="form-label">Rule Name</label>
+                                {{ form.name|add_class:"form-control" }}
+                                {% if form.name.errors %}
+                                <div class="text-danger">
+                                    {{ form.name.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="id_rule_type" class="form-label">Rule Type</label>
+                                {{ form.rule_type|add_class:"form-select" }}
+                                {% if form.rule_type.errors %}
+                                <div class="text-danger">
+                                    {{ form.rule_type.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="id_severity" class="form-label">Severity</label>
+                                {{ form.severity|add_class:"form-select" }}
+                                {% if form.severity.errors %}
+                                <div class="text-danger">
+                                    {{ form.severity.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-3 form-check form-switch">
+                                {{ form.enabled|add_class:"form-check-input" }}
+                                <label class="form-check-label" for="id_enabled">Enabled</label>
+                                {% if form.enabled.errors %}
+                                <div class="text-danger">
+                                    {{ form.enabled.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-3 form-check form-switch">
+                                {{ form.should_alert|add_class:"form-check-input" }}
+                                <label class="form-check-label" for="id_should_alert">Generate Alert on Match</label>
+                                {% if form.should_alert.errors %}
+                                <div class="text-danger">
+                                    {{ form.should_alert.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="id_description" class="form-label">Description</label>
+                                {{ form.description|add_class:"form-control" }}
+                                {% if form.description.errors %}
+                                <div class="text-danger">
+                                    {{ form.description.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="id_alert_message_template" class="form-label">Alert Message Template</label>
+                                {{ form.alert_message_template|add_class:"form-control" }}
+                                <div class="form-text">Template for alert messages. Use {variables} for substitution.</div>
+                                {% if form.alert_message_template.errors %}
+                                <div class="text-danger">
+                                    {{ form.alert_message_template.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Signature-based Rule Settings -->
+                    <div class="card mb-3 rule-section" id="signature-section">
+                        <div class="card-header bg-primary text-white">
+                            <h5>Signature-based Rule Settings</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="id_pattern" class="form-label">Detection Pattern (Regex)</label>
+                                {{ form.pattern|add_class:"form-control" }}
+                                <div class="form-text">Regular expression pattern to match in log content</div>
+                                {% if form.pattern.errors %}
+                                <div class="text-danger">
+                                    {{ form.pattern.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Threshold-based Rule Settings -->
+                    <div class="card mb-3 rule-section" id="threshold-section">
+                        <div class="card-header bg-warning text-dark">
+                            <h5>Threshold-based Rule Settings</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="id_metric" class="form-label">Metric</label>
+                                        {{ form.metric|add_class:"form-control" }}
+                                        <div class="form-text">Name of the metric to monitor (e.g., packets_per_second)</div>
+                                        {% if form.metric.errors %}
+                                        <div class="text-danger">
+                                            {{ form.metric.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="id_threshold" class="form-label">Threshold Value</label>
+                                        {{ form.threshold|add_class:"form-control" }}
+                                        <div class="form-text">Value that triggers the rule when exceeded</div>
+                                        {% if form.threshold.errors %}
+                                        <div class="text-danger">
+                                            {{ form.threshold.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="id_time_window" class="form-label">Time Window (seconds)</label>
+                                        {{ form.time_window|add_class:"form-control" }}
+                                        <div class="form-text">Time window for threshold evaluation</div>
+                                        {% if form.time_window.errors %}
+                                        <div class="text-danger">
+                                            {{ form.time_window.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Anomaly-based Rule Settings -->
+                    <div class="card mb-3 rule-section" id="anomaly-section">
+                        <div class="card-header bg-info text-white">
+                            <h5>Anomaly-based Rule Settings</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="id_deviation_factor" class="form-label">Deviation Factor</label>
+                                        {{ form.deviation_factor|add_class:"form-control" }}
+                                        <div class="form-text">Factor by which a value can deviate from the baseline</div>
+                                        {% if form.deviation_factor.errors %}
+                                        <div class="text-danger">
+                                            {{ form.deviation_factor.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="id_baseline_data_json" class="form-label">Baseline Data (JSON)</label>
+                                        {{ form.baseline_data_json|add_class:"form-control" }}
+                                        <div class="form-text">JSON object with baseline data for metrics</div>
+                                        {% if form.baseline_data_json.errors %}
+                                        <div class="text-danger">
+                                            {{ form.baseline_data_json.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> {% if is_create %}Create Rule{% else %}Save Changes{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Show/hide rule-specific settings based on rule type
+    document.addEventListener('DOMContentLoaded', function() {
+        const ruleTypeSelect = document.getElementById('id_rule_type');
+        const signatureSection = document.getElementById('signature-section');
+        const thresholdSection = document.getElementById('threshold-section');
+        const anomalySection = document.getElementById('anomaly-section');
+        
+        function updateSections() {
+            const ruleType = ruleTypeSelect.value;
+            
+            // Hide all sections first
+            signatureSection.style.display = 'none';
+            thresholdSection.style.display = 'none';
+            anomalySection.style.display = 'none';
+            
+            // Show the section for the selected rule type
+            if (ruleType === 'signature') {
+                signatureSection.style.display = 'block';
+            } else if (ruleType === 'threshold') {
+                thresholdSection.style.display = 'block';
+            } else if (ruleType === 'anomaly') {
+                anomalySection.style.display = 'block';
+            }
+        }
+        
+        // Initial update
+        updateSections();
+        
+        // Update when selection changes
+        ruleTypeSelect.addEventListener('change', updateSections);
+        
+        // Helper to validate JSON in the baseline data field
+        const baselineDataField = document.getElementById('id_baseline_data_json');
+        if (baselineDataField) {
+            document.querySelector('form').addEventListener('submit', function(e) {
+                if (baselineDataField.value.trim() && anomalySection.style.display !== 'none') {
+                    try {
+                        JSON.parse(baselineDataField.value);
+                    } catch (error) {
+                        e.preventDefault();
+                        alert('Invalid JSON format in baseline data. Please correct the format.');
+                        baselineDataField.focus();
+                    }
+                }
+            });
+        }
+    });
+</script>
+{% endblock %} 

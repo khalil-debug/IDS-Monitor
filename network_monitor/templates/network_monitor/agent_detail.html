@@ -1,0 +1,578 @@
+{% extends 'network_monitor/base.html' %}
+{% load static %}
+
+{% block title %}Agent Details - {{ agent.name }} - IDS{% endblock %}
+
+{% block page_title %}Agent Details: {{ agent.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .log-row {
+        cursor: pointer;
+    }
+    .log-row:hover {
+        background-color: #f5f5f5;
+    }
+    .log-detail-container {
+        max-height: 500px;
+        overflow-y: auto;
+        font-family: monospace;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+    .rule-card {
+        margin-bottom: 1rem;
+    }
+    .rule-header {
+        cursor: pointer;
+    }
+    .rule-header:hover {
+        background-color: #f0f8ff;
+    }
+    .severity-low {
+        color: #198754;
+    }
+    .severity-medium {
+        color: #fd7e14;
+    }
+    .severity-high {
+        color: #dc3545;
+    }
+    .severity-critical {
+        color: #7a0000;
+        font-weight: bold;
+    }
+    .apply-rule-btn {
+        cursor: pointer;
+    }
+    #ruleResultAlert {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- CSRF Token for AJAX requests -->
+{% csrf_token %}
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>Agent Information</h5>
+                <div>
+                    <a href="{% url 'network_monitor:agent_list' %}" class="btn btn-sm btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to List
+                    </a>
+                    <a href="{% url 'network_monitor:agent_configure' agent.id %}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-gear"></i> Configure
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table">
+                            <tr>
+                                <th style="width: 35%">Name:</th>
+                                <td>{{ agent.name }}</td>
+                            </tr>
+                            <tr>
+                                <th>Status:</th>
+                                <td>
+                                    {% if agent.status == 'online' %}
+                                    <span class="badge bg-success">Online</span>
+                                    {% elif agent.status == 'offline' %}
+                                    <span class="badge bg-warning text-dark">Offline</span>
+                                    {% elif agent.status == 'pending' %}
+                                    <span class="badge bg-info">Pending</span>
+                                    {% elif agent.status == 'disabled' %}
+                                    <span class="badge bg-secondary">Disabled</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Platform:</th>
+                                <td>{{ agent.get_platform_display }}</td>
+                            </tr>
+                            <tr>
+                                <th>Description:</th>
+                                <td>{{ agent.description|default:"No description" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table">
+                            <tr>
+                                <th style="width: 35%">IP Address:</th>
+                                <td>{{ agent.endpoint_ip|default:"N/A" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Hostname:</th>
+                                <td>{{ agent.endpoint_hostname|default:"N/A" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Last Seen:</th>
+                                <td>
+                                    {% if agent.last_seen %}
+                                    {{ agent.last_seen }} ({{ agent.last_seen|timesince }} ago)
+                                    {% else %}
+                                    Never
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Collection Interval:</th>
+                                <td>{{ agent.collection_interval }} seconds</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Agent Token</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-warning">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    This token is used to authenticate the agent. Keep it secure and never share it publicly.
+                </p>
+                <div class="input-group">
+                    <input type="text" class="form-control" value="{{ agent.token }}" id="agent-token" readonly>
+                    <button class="btn btn-outline-secondary" type="button" id="copy-token">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Configuration</h5>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 border rounded"><code>{{ agent.config|default:'{}' }}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Log Detail Modal -->
+<div class="modal fade" id="logDetailModal" tabindex="-1" aria-labelledby="logDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="logDetailModalLabel">Log Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="logDetailContent">
+                    <p class="text-center">Loading log details...</p>
+                </div>
+                
+                <div id="ruleResultAlert" class="alert mt-3" role="alert"></div>
+                
+                <div class="mt-4">
+                    <h6>Apply Detection Rules</h6>
+                    <div class="row">
+                        <div class="col-md-9">
+                            <select class="form-select" id="ruleSelector">
+                                <option value="">Select a rule to apply to this log...</option>
+                                {% for rule_type, rules in rules_by_type.items %}
+                                    <optgroup label="{{ rule_type }}">
+                                        {% for rule in rules %}
+                                            {% if rule.rule_type == 'signature' %}
+                                            <option value="{{ rule.id }}" data-severity="{{ rule.severity }}">{{ rule.name }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </optgroup>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-primary w-100" id="applyRuleBtn" disabled>
+                                Apply Rule
+                            </button>
+                        </div>
+                    </div>
+                    <small class="text-muted">Note: Only signature-based rules can be applied manually to individual logs.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>Recent Logs</h5>
+                <button class="btn btn-sm btn-outline-primary" id="refreshLogsBtn">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Type</th>
+                                <th>Source</th>
+                                <th>Content</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr class="log-row" data-log-id="{{ log.id }}">
+                                <td>{{ log.timestamp }}</td>
+                                <td>{{ log.log_type }}</td>
+                                <td>{{ log.source }}</td>
+                                <td>{{ log.content|truncatechars:50 }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info view-log-detail" data-log-id="{{ log.id }}">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center">No logs found for this agent</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Recent Events</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>Severity</th>
+                                <th>Threat</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in events %}
+                            <tr>
+                                <td>{{ event.timestamp }}</td>
+                                <td>{{ event.get_event_type_display }}</td>
+                                <td class="severity-{{ event.severity }}">{{ event.get_severity_display }}</td>
+                                <td>
+                                    {% if event.is_threat %}
+                                    <span class="badge bg-danger">Yes</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">No</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center">No events found for this agent</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Detection Rules</h5>
+            </div>
+            <div class="card-body">
+                <div class="accordion" id="rulesAccordion">
+                    {% for rule_type, rules in rules_by_type.items %}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                            <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="collapse{{ forloop.counter }}">
+                                {{ rule_type }} Rules ({{ rules|length }})
+                            </button>
+                        </h2>
+                        <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" aria-labelledby="heading{{ forloop.counter }}">
+                            <div class="accordion-body">
+                                <div class="row">
+                                    {% for rule in rules %}
+                                    <div class="col-md-6">
+                                        <div class="card rule-card">
+                                            <div class="card-header rule-header d-flex justify-content-between">
+                                                <span>{{ rule.name }}</span>
+                                                <span class="severity-{{ rule.severity }}">{{ rule.get_severity_display }}</span>
+                                            </div>
+                                            <div class="card-body">
+                                                <p>{{ rule.description }}</p>
+                                                {% if rule.rule_type == 'signature' and rule.pattern %}
+                                                <p><strong>Pattern:</strong> <code>{{ rule.pattern }}</code></p>
+                                                {% elif rule.rule_type == 'threshold' %}
+                                                <p><strong>Metric:</strong> {{ rule.metric }}</p>
+                                                <p><strong>Threshold:</strong> {{ rule.threshold }} (over {{ rule.time_window }}s)</p>
+                                                {% elif rule.rule_type == 'anomaly' %}
+                                                <p><strong>Deviation Factor:</strong> {{ rule.deviation_factor }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-center">No detection rules configured</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Variable to store current log ID
+    let currentLogId = null;
+    
+    document.getElementById('copy-token').addEventListener('click', function() {
+        var tokenInput = document.getElementById('agent-token');
+        tokenInput.select();
+        tokenInput.setSelectionRange(0, 99999);
+        document.execCommand('copy');
+        
+        // Show feedback
+        this.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
+        setTimeout(() => {
+            this.innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+        }, 2000);
+    });
+    
+    // Format JSON in the configuration section
+    document.addEventListener('DOMContentLoaded', function() {
+        try {
+            const configElement = document.querySelector('.card-body pre code');
+            const configData = JSON.parse(configElement.textContent);
+            configElement.textContent = JSON.stringify(configData, null, 2);
+        } catch (e) {
+            // If JSON parsing fails, leave as is
+            console.log('Could not parse JSON configuration');
+        }
+        
+        // Handle refresh logs button
+        document.getElementById('refreshLogsBtn').addEventListener('click', function() {
+            // Reload the current page to refresh logs
+            window.location.reload();
+        });
+        
+        // Handle log row clicks
+        document.querySelectorAll('.log-row').forEach(row => {
+            row.addEventListener('click', function(e) {
+                // Prevent click if the clicked element is already a link or button
+                if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.tagName === 'I') {
+                    return;
+                }
+                
+                const logId = this.getAttribute('data-log-id');
+                const viewButton = this.querySelector('.view-log-detail');
+                if (viewButton) {
+                    viewButton.click();
+                }
+            });
+        });
+        
+        // Handle log detail button clicks with AJAX
+        document.querySelectorAll('.view-log-detail').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const logId = this.getAttribute('data-log-id');
+                currentLogId = logId;
+                
+                // Reset rule selector and rule result alert
+                document.getElementById('ruleSelector').value = '';
+                document.getElementById('applyRuleBtn').disabled = true;
+                document.getElementById('ruleResultAlert').style.display = 'none';
+                
+                // Show modal
+                const logDetailModal = new bootstrap.Modal(document.getElementById('logDetailModal'));
+                logDetailModal.show();
+                
+                // Load log details via AJAX
+                fetch(`?log_id=${logId}&action=get_log_detail`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const log = data.log;
+                        let content = `
+                            <div class="mb-3">
+                                <h6>Metadata</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <th>Timestamp:</th>
+                                        <td>${log.timestamp}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Log Type:</th>
+                                        <td>${log.log_type}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Source:</th>
+                                        <td>${log.source}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Processed:</th>
+                                        <td>
+                                            ${log.is_processed ? 
+                                                '<span class="badge bg-success">Yes</span>' : 
+                                                '<span class="badge bg-warning text-dark">No</span>'}
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <h6>Content</h6>
+                                <div class="log-detail-container border p-3 bg-light">
+                                    ${log.content}
+                                </div>
+                            </div>
+                        `;
+                        
+                        if (log.parsed_data && Object.keys(log.parsed_data).length > 0) {
+                            content += `
+                                <div>
+                                    <h6>Parsed Data</h6>
+                                    <div class="log-detail-container border p-3 bg-light">
+                                        <pre>${JSON.stringify(log.parsed_data, null, 2)}</pre>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        document.getElementById('logDetailContent').innerHTML = content;
+                    } else {
+                        document.getElementById('logDetailContent').innerHTML = `
+                            <div class="alert alert-danger">
+                                Error loading log details: ${data.error || 'Unknown error'}
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('logDetailContent').innerHTML = `
+                        <div class="alert alert-danger">
+                            Error loading log details: ${error.message}
+                        </div>
+                    `;
+                });
+            });
+        });
+        
+        // Enable/disable apply rule button based on rule selection
+        document.getElementById('ruleSelector').addEventListener('change', function() {
+            document.getElementById('applyRuleBtn').disabled = !this.value;
+        });
+        
+        // Handle apply rule button click
+        document.getElementById('applyRuleBtn').addEventListener('click', function() {
+            const ruleId = document.getElementById('ruleSelector').value;
+            if (!ruleId || !currentLogId) return;
+            
+            // Show loading state
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Applying...';
+            
+            // Reset result alert
+            const resultAlert = document.getElementById('ruleResultAlert');
+            resultAlert.style.display = 'none';
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('log_id', currentLogId);
+            formData.append('rule_id', ruleId);
+            
+            // Get CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') ? 
+                             document.querySelector('[name=csrfmiddlewaretoken]').value : '';
+                             
+            // Send request to apply rule
+            fetch('{% url "network_monitor:apply_rule_to_log" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button state
+                this.disabled = false;
+                this.innerHTML = 'Apply Rule';
+                
+                // Show result
+                resultAlert.style.display = 'block';
+                if (data.success) {
+                    resultAlert.className = 'alert alert-success mt-3';
+                    resultAlert.innerHTML = `
+                        <h5><i class="bi bi-check-circle-fill me-2"></i> Rule applied successfully!</h5>
+                        <p>${data.message}</p>
+                        ${data.event_id ? 
+                            `<p>An event and alert have been created based on this rule match.</p>` : 
+                            ''}
+                    `;
+                } else {
+                    resultAlert.className = 'alert alert-warning mt-3';
+                    resultAlert.innerHTML = `
+                        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Rule did not match</h5>
+                        <p>${data.message}</p>
+                    `;
+                }
+            })
+            .catch(error => {
+                // Reset button state
+                this.disabled = false;
+                this.innerHTML = 'Apply Rule';
+                
+                // Show error
+                resultAlert.style.display = 'block';
+                resultAlert.className = 'alert alert-danger mt-3';
+                resultAlert.innerHTML = `
+                    <h5><i class="bi bi-x-circle-fill me-2"></i> Error</h5>
+                    <p>Failed to apply rule: ${error.message}</p>
+                `;
+            });
+        });
+    });
+</script>
+{% endblock %} 

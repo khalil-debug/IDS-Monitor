@@ -1,0 +1,61 @@
+{
+    "agent": {
+        "name": "test-agent-linux",
+        "server_url": "http://localhost:8000/monitor",
+        "collection_interval": 60,
+        "heartbeat_interval": 300
+    },
+    "logs": [
+        {
+            "type": "file",
+            "source": "/var/log/auth.log",
+            "log_type": "auth",
+            "description": "Authentication logs"
+        },
+        {
+            "type": "file",
+            "source": "/var/log/syslog",
+            "log_type": "system",
+            "description": "System logs"
+        },
+        {
+            "type": "file",
+            "source": "/var/log/kern.log",
+            "log_type": "kernel",
+            "description": "Kernel logs"
+        },
+        {
+            "type": "file",
+            "source": "/var/log/apache2/access.log",
+            "log_type": "webserver",
+            "description": "Apache access logs"
+        },
+        {
+            "type": "file",
+            "source": "/var/log/apache2/error.log",
+            "log_type": "webserver",
+            "description": "Apache error logs"
+        },
+        {
+            "type": "command",
+            "command": "ss -tuln",
+            "source": "network_status",
+            "log_type": "network",
+            "description": "Active listening ports"
+        },
+        {
+            "type": "command",
+            "command": "ps -ef",
+            "source": "process_list",
+            "log_type": "process",
+            "description": "Running processes"
+        },
+        {
+            "type": "command",
+            "command": "grep 'Failed password' /var/log/auth.log | tail -n 20",
+            "source": "failed_logins",
+            "log_type": "security",
+            "description": "Recent failed login attempts"
+        }
+    ]
+} 

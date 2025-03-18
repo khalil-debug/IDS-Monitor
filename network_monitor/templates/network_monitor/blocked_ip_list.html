@@ -1,0 +1,124 @@
+{% extends 'network_monitor/base.html' %}
+{% load form_tags %}
+
+{% block title %}Blocked IPs - IDS{% endblock %}
+
+{% block page_title %}Blocked IP Addresses{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Add New Blocked IP</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{% url 'network_monitor:block_ip' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_ip_address" class="form-label">IP Address</label>
+                        {{ form.ip_address|add_class:"form-control" }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_reason" class="form-label">Reason</label>
+                        {{ form.reason|add_class:"form-control" }}
+                    </div>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-ban"></i> Block IP
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5>Filter</h5>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <a href="{% url 'network_monitor:blocked_ip_list' %}" class="btn btn-sm btn-outline-secondary">Clear Filters</a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-6">
+                        <label for="active" class="form-label">Status</label>
+                        <select name="active" id="active" class="form-select">
+                            <option value="">All</option>
+                            <option value="true" {% if request.GET.active == 'true' %}selected{% endif %}>Active</option>
+                            <option value="false" {% if request.GET.active == 'false' %}selected{% endif %}>Inactive</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="search" class="form-label">Search</label>
+                        <input type="text" name="search" id="search" class="form-control" placeholder="IP address" value="{{ request.GET.search }}">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Apply Filters</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Blocked IP List</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>IP Address</th>
+                        <th>Reason</th>
+                        <th>Added</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ip in blocked_ips %}
+                    <tr>
+                        <td>{{ ip.ip_address }}</td>
+                        <td>{{ ip.reason }}</td>
+                        <td>{{ ip.added }}</td>
+                        <td>
+                            {% if ip.active %}
+                            <span class="badge bg-danger">Blocked</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Unblocked</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if ip.active %}
+                            <a href="{% url 'network_monitor:unblock_ip' ip.id %}" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-unlock"></i> Unblock
+                            </a>
+                            {% else %}
+                            <form method="post" action="{% url 'network_monitor:block_ip' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="ip_address" value="{{ ip.ip_address }}">
+                                <input type="hidden" name="reason" value="{{ ip.reason }} (reactivated)">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-lock"></i> Block Again
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center">No blocked IPs found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %} 

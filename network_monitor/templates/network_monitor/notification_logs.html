@@ -1,0 +1,425 @@
+{% extends 'network_monitor/base.html' %}
+
+{% block title %}Notification Logs - IDS{% endblock %}
+
+{% block page_title %}Notification Logs{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Notification History</h5>
+                <div>
+                    <a href="{% url 'network_monitor:notification_settings' %}" class="btn btn-sm btn-light">
+                        <i class="bi bi-gear"></i> Notification Settings
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Filters -->
+                <div class="mb-4">
+                    <button class="btn btn-sm btn-outline-secondary mb-2" type="button" data-bs-toggle="collapse" 
+                            data-bs-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse">
+                        <i class="bi bi-funnel"></i> Show/Hide Filters
+                    </button>
+                    <div class="collapse" id="filterCollapse">
+                        <form method="get" class="card card-body bg-light">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">Status</label>
+                                    <select name="success" class="form-select form-select-sm">
+                                        <option value="">All</option>
+                                        <option value="true" {% if request.GET.success == 'true' %}selected{% endif %}>Success</option>
+                                        <option value="false" {% if request.GET.success == 'false' %}selected{% endif %}>Failed</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Channel</label>
+                                    <select name="channel" class="form-select form-select-sm">
+                                        <option value="">All</option>
+                                        <option value="telegram" {% if request.GET.channel == 'telegram' %}selected{% endif %}>Telegram</option>
+                                        <option value="email" {% if request.GET.channel == 'email' %}selected{% endif %}>Email</option>
+                                        <option value="webhook" {% if request.GET.channel == 'webhook' %}selected{% endif %}>Webhook</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Start Date</label>
+                                    <input type="date" name="start_date" class="form-control form-control-sm" value="{{ request.GET.start_date }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">End Date</label>
+                                    <input type="date" name="end_date" class="form-control form-control-sm" value="{{ request.GET.end_date }}">
+                                </div>
+                                <div class="col-md-12 mt-3">
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-filter"></i> Apply Filters
+                                    </button>
+                                    <a href="{% url 'network_monitor:notification_logs' %}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-x-circle"></i> Clear Filters
+                                    </a>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Statistics cards in a single row with smaller height -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="card bg-light text-dark">
+                            <div class="card-body py-2 text-center">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <i class="bi bi-bell fs-3"></i>
+                                    <div>
+                                        <span class="d-block small">Total</span>
+                                        <span class="fw-bold fs-4">{{ total_logs }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body py-2 text-center">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <i class="bi bi-check-circle fs-3"></i>
+                                    <div>
+                                        <span class="d-block small">Success</span>
+                                        <span class="fw-bold fs-4">{{ successful_logs }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body py-2 text-center">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <i class="bi bi-x-circle fs-3"></i>
+                                    <div>
+                                        <span class="d-block small">Failed</span>
+                                        <span class="fw-bold fs-4">{{ failed_logs }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body py-2 text-center">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <i class="bi bi-calendar-day fs-3"></i>
+                                    <div>
+                                        <span class="d-block small">Today</span>
+                                        <span class="fw-bold fs-4">{{ today_logs }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Logs Table - More concise version -->
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Time</th>
+                                <th>Alert</th>
+                                <th class="text-center">Severity</th>
+                                <th class="text-center">Channels</th>
+                                <th class="text-center">Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in page_obj %}
+                            <tr>
+                                <td>{{ log.timestamp|date:"m-d H:i" }}</td>
+                                <td>
+                                    <a href="{% url 'network_monitor:event_detail' log.alert.event.id %}" class="text-decoration-none">
+                                        {{ log.alert.event.get_event_type_display|truncatechars:30 }}
+                                    </a>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-{{ log.alert.event.severity|yesno:'danger,warning,info,secondary' }}">
+                                        {{ log.alert.event.get_severity_display }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    {% for channel in log.channel_list %}
+                                        {% if channel == 'telegram' %}
+                                            <i class="bi bi-telegram text-primary" title="Telegram"></i>
+                                        {% elif channel == 'email' %}
+                                            <i class="bi bi-envelope text-success" title="Email"></i>
+                                        {% elif channel == 'webhook' %}
+                                            <i class="bi bi-link-45deg text-warning" title="Webhook"></i>
+                                        {% else %}
+                                            <i class="bi bi-question-circle text-secondary" title="{{ channel }}"></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                <td class="text-center">
+                                    {% if log.success %}
+                                        <i class="bi bi-check-circle-fill text-success" title="Success"></i>
+                                    {% else %}
+                                        <i class="bi bi-x-circle-fill text-danger" title="Failed"></i>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#logModal{{ log.id }}">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    
+                                    {% if not log.success %}
+                                    <form method="post" action="{% url 'network_monitor:retry_notification' log.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-warning">
+                                            <i class="bi bi-arrow-repeat"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            
+                            <!-- Modal for log details - Improved version -->
+                            <div class="modal fade" id="logModal{{ log.id }}" tabindex="-1" aria-labelledby="logModalLabel{{ log.id }}" aria-hidden="true">
+                                <div class="modal-dialog modal-lg">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="logModalLabel{{ log.id }}">
+                                                <span class="badge bg-{{ log.alert.event.severity|yesno:'danger,warning,info,secondary' }} me-2">
+                                                    {{ log.alert.event.get_severity_display }}
+                                                </span>
+                                                {{ log.alert.event.get_event_type_display }}
+                                            </h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <ul class="nav nav-tabs" id="detailTabs{{ log.id }}" role="tablist">
+                                                <li class="nav-item" role="presentation">
+                                                    <button class="nav-link active" id="overview-tab{{ log.id }}" data-bs-toggle="tab" 
+                                                            data-bs-target="#overview{{ log.id }}" type="button" role="tab" 
+                                                            aria-controls="overview{{ log.id }}" aria-selected="true">
+                                                        Overview
+                                                    </button>
+                                                </li>
+                                                <li class="nav-item" role="presentation">
+                                                    <button class="nav-link" id="message-tab{{ log.id }}" data-bs-toggle="tab" 
+                                                            data-bs-target="#message{{ log.id }}" type="button" role="tab" 
+                                                            aria-controls="message{{ log.id }}" aria-selected="false">
+                                                        Message
+                                                    </button>
+                                                </li>
+                                                <li class="nav-item" role="presentation">
+                                                    <button class="nav-link" id="technical-tab{{ log.id }}" data-bs-toggle="tab" 
+                                                            data-bs-target="#technical{{ log.id }}" type="button" role="tab" 
+                                                            aria-controls="technical{{ log.id }}" aria-selected="false">
+                                                        Technical Details
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                            <div class="tab-content pt-3" id="detailTabsContent{{ log.id }}">
+                                                <!-- Overview Tab -->
+                                                <div class="tab-pane fade show active" id="overview{{ log.id }}" role="tabpanel" aria-labelledby="overview-tab{{ log.id }}">
+                                                    <div class="row g-3">
+                                                        <div class="col-md-6">
+                                                            <div class="card h-100">
+                                                                <div class="card-header bg-light py-2">
+                                                                    <h6 class="mb-0">Event Information</h6>
+                                                                </div>
+                                                                <div class="card-body">
+                                                                    <div class="mb-2">
+                                                                        <small class="text-muted d-block">Event Type:</small>
+                                                                        <span>{{ log.alert.event.get_event_type_display }}</span>
+                                                                    </div>
+                                                                    <div class="mb-2">
+                                                                        <small class="text-muted d-block">Triggered On:</small>
+                                                                        <span>{{ log.timestamp|date:"Y-m-d H:i:s" }}</span>
+                                                                    </div>
+                                                                    <div class="mb-2">
+                                                                        <small class="text-muted d-block">Source:</small>
+                                                                        <span>{{ log.alert.event.source_ip }}{% if log.alert.event.source_port %}:{{ log.alert.event.source_port }}{% endif %}</span>
+                                                                    </div>
+                                                                    <div class="mb-2">
+                                                                        <small class="text-muted d-block">Destination:</small>
+                                                                        <span>{{ log.alert.event.destination_ip }}{% if log.alert.event.destination_port %}:{{ log.alert.event.destination_port }}{% endif %}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="card h-100">
+                                                                <div class="card-header bg-light py-2">
+                                                                    <h6 class="mb-0">Notification Details</h6>
+                                                                </div>
+                                                                <div class="card-body">
+                                                                    <div class="mb-2">
+                                                                        <small class="text-muted d-block">Notification ID:</small>
+                                                                        <span>{{ log.id }}</span>
+                                                                    </div>
+                                                                    <div class="mb-2">
+                                                                        <small class="text-muted d-block">Channels:</small>
+                                                                        <div>
+                                                                            {% for channel in log.channel_list %}
+                                                                                {% if channel == 'telegram' %}
+                                                                                    <span class="badge bg-primary me-1">Telegram</span>
+                                                                                {% elif channel == 'email' %}
+                                                                                    <span class="badge bg-success me-1">Email</span>
+                                                                                {% elif channel == 'webhook' %}
+                                                                                    <span class="badge bg-warning text-dark me-1">Webhook</span>
+                                                                                {% else %}
+                                                                                    <span class="badge bg-secondary me-1">{{ channel }}</span>
+                                                                                {% endif %}
+                                                                            {% endfor %}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="mb-2">
+                                                                        <small class="text-muted d-block">Status:</small>
+                                                                        {% if log.success %}
+                                                                            <span class="badge bg-success">Success</span>
+                                                                        {% else %}
+                                                                            <span class="badge bg-danger">Failed</span>
+                                                                        {% endif %}
+                                                                    </div>
+                                                                    {% if log.error_message %}
+                                                                    <div class="mb-2">
+                                                                        <small class="text-muted d-block">Error:</small>
+                                                                        <div class="alert alert-danger py-1 px-2 mb-0 small">{{ log.error_message }}</div>
+                                                                    </div>
+                                                                    {% endif %}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Message Tab -->
+                                                <div class="tab-pane fade" id="message{{ log.id }}" role="tabpanel" aria-labelledby="message-tab{{ log.id }}">
+                                                    {% if log.alert.event.description %}
+                                                    <div class="card">
+                                                        <div class="card-body">
+                                                            <h6 class="card-subtitle mb-2 text-muted">Alert Message</h6>
+                                                            <div class="alert alert-secondary">
+                                                                {{ log.alert.event.description }}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% else %}
+                                                    <div class="alert alert-info">
+                                                        <i class="bi bi-info-circle"></i> No detailed message available for this alert.
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                                
+                                                <!-- Technical Details Tab -->
+                                                <div class="tab-pane fade" id="technical{{ log.id }}" role="tabpanel" aria-labelledby="technical-tab{{ log.id }}">
+                                                    {% if log.alert.event.packet_info %}
+                                                    <div class="card">
+                                                        <div class="card-body">
+                                                            <h6 class="card-subtitle mb-2 text-muted">Packet Information</h6>
+                                                            <pre class="bg-light p-2 small"><code>{{ log.alert.event.packet_info|pprint }}</code></pre>
+                                                        </div>
+                                                    </div>
+                                                    {% else %}
+                                                    <div class="alert alert-info">
+                                                        <i class="bi bi-info-circle"></i> No additional technical data available for this alert.
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <a href="{% url 'network_monitor:event_detail' log.alert.event.id %}" class="btn btn-sm btn-primary">
+                                                <i class="bi bi-file-earmark-text"></i> View Event
+                                            </a>
+                                            {% if not log.success %}
+                                            <form method="post" action="{% url 'network_monitor:retry_notification' log.id %}" class="d-inline">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-sm btn-warning">
+                                                    <i class="bi bi-arrow-repeat"></i> Retry
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4">
+                                    <div class="alert alert-info mb-0">
+                                        <i class="bi bi-info-circle"></i> No notification logs found.
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                {% if page_obj.has_other_pages %}
+                <nav aria-label="Notification logs pagination" class="mt-3">
+                    <ul class="pagination pagination-sm justify-content-center">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if request.GET.success %}success={{ request.GET.success }}&{% endif %}{% if request.GET.channel %}channel={{ request.GET.channel }}&{% endif %}{% if request.GET.start_date %}start_date={{ request.GET.start_date }}&{% endif %}{% if request.GET.end_date %}end_date={{ request.GET.end_date }}&{% endif %}page=1">
+                                <i class="bi bi-chevron-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if request.GET.success %}success={{ request.GET.success }}&{% endif %}{% if request.GET.channel %}channel={{ request.GET.channel }}&{% endif %}{% if request.GET.start_date %}start_date={{ request.GET.start_date }}&{% endif %}{% if request.GET.end_date %}end_date={{ request.GET.end_date }}&{% endif %}page={{ page_obj.previous_page_number }}">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#"><i class="bi bi-chevron-double-left"></i></a>
+                        </li>
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#"><i class="bi bi-chevron-left"></i></a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% if request.GET.success %}success={{ request.GET.success }}&{% endif %}{% if request.GET.channel %}channel={{ request.GET.channel }}&{% endif %}{% if request.GET.start_date %}start_date={{ request.GET.start_date }}&{% endif %}{% if request.GET.end_date %}end_date={{ request.GET.end_date }}&{% endif %}page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if request.GET.success %}success={{ request.GET.success }}&{% endif %}{% if request.GET.channel %}channel={{ request.GET.channel }}&{% endif %}{% if request.GET.start_date %}start_date={{ request.GET.start_date }}&{% endif %}{% if request.GET.end_date %}end_date={{ request.GET.end_date }}&{% endif %}page={{ page_obj.next_page_number }}">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if request.GET.success %}success={{ request.GET.success }}&{% endif %}{% if request.GET.channel %}channel={{ request.GET.channel }}&{% endif %}{% if request.GET.start_date %}start_date={{ request.GET.start_date }}&{% endif %}{% if request.GET.end_date %}end_date={{ request.GET.end_date }}&{% endif %}page={{ page_obj.paginator.num_pages }}">
+                                <i class="bi bi-chevron-double-right"></i>
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#"><i class="bi bi-chevron-right"></i></a>
+                        </li>
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#"><i class="bi bi-chevron-double-right"></i></a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

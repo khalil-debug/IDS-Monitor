@@ -1,0 +1,183 @@
+{% extends 'network_monitor/base.html' %}
+
+{% block title %}Generate Security Report - IDS{% endblock %}
+
+{% block page_title %}Generate Security Report{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-card {
+        margin-bottom: 30px;
+        transition: all 0.3s ease;
+    }
+    .report-card:hover {
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    .report-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+        color: #4285F4;
+    }
+    .form-container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .date-range {
+        display: none;
+    }
+    .report-option.active {
+        background-color: #e9f5ff;
+        border-color: #4285F4;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Security Report Generation</h5>
+                <p class="card-text">Generate detailed security reports for your network. You can choose from predefined time periods or specify a custom date range.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card report-card report-option" data-type="daily">
+            <div class="card-body text-center">
+                <div class="report-icon">
+                    <i class="fas fa-calendar-day"></i>
+                </div>
+                <h5 class="card-title">Daily Report</h5>
+                <p class="card-text">Security events from the last 24 hours with detailed analysis</p>
+                <p class="text-muted">Includes all security incidents, alerts, and attacks from today</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card report-card report-option" data-type="weekly">
+            <div class="card-body text-center">
+                <div class="report-icon">
+                    <i class="fas fa-calendar-week"></i>
+                </div>
+                <h5 class="card-title">Weekly Report</h5>
+                <p class="card-text">Comprehensive security summary of the past 7 days</p>
+                <p class="text-muted">Includes trend analysis and threat patterns for the week</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card report-card report-option" data-type="monthly">
+            <div class="card-body text-center">
+                <div class="report-icon">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+                <h5 class="card-title">Monthly Report</h5>
+                <p class="card-text">Complete monthly security overview with analytics</p>
+                <p class="text-muted">Includes comparison with previous months and security recommendations</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card report-card report-option" data-type="custom">
+            <div class="card-body text-center">
+                <div class="report-icon">
+                    <i class="fas fa-sliders-h"></i>
+                </div>
+                <h5 class="card-title">Custom Report</h5>
+                <p class="card-text">Specify a custom date range for your security report</p>
+                <p class="text-muted">Create a personalized report for any time period</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="form-container">
+            <form id="report-form" method="get" action="{% url 'network_monitor:generate_report' %}">
+                <input type="hidden" name="generate" value="true">
+                <input type="hidden" id="report-type" name="type" value="{{ selected_type }}">
+                
+                <div id="date-range" class="date-range mt-4">
+                    <h5 class="mb-3">Custom Date Range</h5>
+                    <div class="form-group row">
+                        <label for="start-date" class="col-sm-3 col-form-label">Start Date:</label>
+                        <div class="col-sm-9">
+                            <input type="date" class="form-control" id="start-date" name="start_date">
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label for="end-date" class="col-sm-3 col-form-label">End Date:</label>
+                        <div class="col-sm-9">
+                            <input type="date" class="form-control" id="end-date" name="end_date">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group row mt-4">
+                    <div class="col-sm-12 text-center">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-file-pdf mr-2"></i> Generate Report
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    $('.report-option[data-type="{{ selected_type }}"]').addClass('active');
+    
+    if ('{{ selected_type }}' === 'custom') {
+        $('#date-range').show();
+    }
+    
+    $('.report-option').click(function() {
+        $('.report-option').removeClass('active');
+        
+        $(this).addClass('active');
+        
+        const reportType = $(this).data('type');
+        
+        $('#report-type').val(reportType);
+        
+        if (reportType === 'custom') {
+            $('#date-range').slideDown();
+        } else {
+            $('#date-range').slideUp();
+        }
+    });
+    
+    const today = new Date();
+    const lastMonth = new Date();
+    lastMonth.setMonth(today.getMonth() - 1);
+    
+    const formatDate = date => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+    
+    $('#start-date').val(formatDate(lastMonth));
+    $('#end-date').val(formatDate(today));
+});
+</script>
+{% endblock %} 

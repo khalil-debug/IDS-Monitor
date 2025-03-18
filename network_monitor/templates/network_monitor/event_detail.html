@@ -1,0 +1,151 @@
+{% extends 'network_monitor/base.html' %}
+
+{% block title %}Event Details - IDS{% endblock %}
+
+{% block page_title %}Event Details{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <a href="{% url 'network_monitor:event_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Events
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Event Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th>Event ID:</th>
+                        <td>{{ event.id }}</td>
+                    </tr>
+                    <tr>
+                        <th>Timestamp:</th>
+                        <td>{{ event.timestamp }}</td>
+                    </tr>
+                    <tr>
+                        <th>Event Type:</th>
+                        <td>{{ event.get_event_type_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Severity:</th>
+                        <td class="severity-{{ event.severity }}">{{ event.get_severity_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Description:</th>
+                        <td>{{ event.description }}</td>
+                    </tr>
+                    <tr>
+                        <th>Is Threat:</th>
+                        <td>
+                            {% if event.is_threat %}
+                            <span class="badge bg-danger">Yes</span>
+                            {% else %}
+                            <span class="badge bg-secondary">No</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Network Details</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th>Source IP:</th>
+                        <td>{{ event.source_ip }}</td>
+                    </tr>
+                    <tr>
+                        <th>Source Port:</th>
+                        <td>{{ event.source_port|default:"N/A" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Destination IP:</th>
+                        <td>{{ event.destination_ip }}</td>
+                    </tr>
+                    <tr>
+                        <th>Destination Port:</th>
+                        <td>{{ event.destination_port|default:"N/A" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Protocol:</th>
+                        <td>{{ event.protocol }}</td>
+                    </tr>
+                    <tr>
+                        <th>Actions:</th>
+                        <td>
+                            <form method="post" action="{% url 'network_monitor:block_ip' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="ip_address" value="{{ event.source_ip }}">
+                                <input type="hidden" name="reason" value="Blocked from event {{ event.id }}: {{ event.description }}">
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <i class="bi bi-ban"></i> Block Source IP
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Packet Information</h5>
+            </div>
+            <div class="card-body">
+                <pre><code>{{ event.packet_info|pprint }}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if alerts %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Related Alerts</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for alert in alerts %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">Alert #{{ alert.id }}</h5>
+                            <small>{{ alert.timestamp }}</small>
+                        </div>
+                        <p class="mb-1">{{ alert.message }}</p>
+                        <small>
+                            Status: 
+                            {% if alert.is_sent %}
+                            <span class="badge bg-success">Sent at {{ alert.sent_timestamp }}</span>
+                            {% else %}
+                            <span class="badge bg-warning">Pending</span>
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %} 

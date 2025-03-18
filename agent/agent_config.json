@@ -1,0 +1,55 @@
+{
+    "agent": {
+        "name": "test-agent-windows",
+        "server_url": "http://localhost:8000/monitor",
+        "collection_interval": 60,
+        "heartbeat_interval": 300
+    },
+    "logs": [
+        {
+            "type": "windows_event",
+            "source": "Security",
+            "log_type": "windows_event",
+            "hours": 1,
+            "max_events": 500,
+            "description": "Windows Security Event Log (last hour, limited to 500 events)"
+        },
+        {
+            "type": "windows_event",
+            "source": "System",
+            "log_type": "windows_event",
+            "hours": 1,
+            "max_events": 200,
+            "description": "Windows System Event Log (last hour, limited to 200 events)"
+        },
+        {
+            "type": "windows_event",
+            "source": "Application",
+            "log_type": "windows_event",
+            "hours": 1,
+            "max_events": 200,
+            "description": "Windows Application Event Log (last hour, limited to 200 events)"
+        },
+        {
+            "type": "command",
+            "command": "netstat -an",
+            "source": "netstat",
+            "log_type": "network",
+            "description": "Active network connections"
+        },
+        {
+            "type": "command",
+            "command": "tasklist",
+            "source": "tasklist",
+            "log_type": "process",
+            "description": "Running processes"
+        },
+        {
+            "type": "command",
+            "command": "net user",
+            "source": "net_user",
+            "log_type": "users",
+            "description": "User accounts"
+        }
+    ]
+}

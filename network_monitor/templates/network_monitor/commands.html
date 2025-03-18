@@ -1,0 +1,290 @@
+{% extends 'network_monitor/base.html' %}
+
+{% block title %}Command Center - IDS{% endblock %}
+
+{% block page_title %}Command Center{% endblock %}
+
+{% block extra_css %}
+<style>
+    .command-card {
+        margin-bottom: 25px;
+        transition: all 0.3s ease;
+    }
+    .command-card:hover {
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    .command-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .command-form {
+        padding: 15px;
+    }
+    .output-container {
+        max-height: 300px;
+        overflow-y: auto;
+        background-color: #f5f5f5;
+        padding: 10px;
+        border-radius: 4px;
+        font-family: monospace;
+        white-space: pre-wrap;
+    }
+    .command-output {
+        font-family: 'Courier New', monospace;
+        color: #333;
+    }
+    .command-error {
+        color: #dc3545;
+    }
+    .running-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #28a745;
+        margin-right: 5px;
+        animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Command Center</h5>
+                <p class="card-text">This interface allows you to execute various commands to manage and test the IDS system. Select a command below and configure its parameters before execution.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="accordion" id="commandsAccordion">
+            {% for cmd_id, cmd in commands.items %}
+            <div class="card command-card">
+                <div class="card-header command-header" id="heading{{ forloop.counter }}">
+                    <h2 class="mb-0">
+                        <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse{{ forloop.counter }}">
+                            {{ cmd.name }}
+                        </button>
+                    </h2>
+                    <span class="badge bg-primary">{{ cmd.command }}</span>
+                </div>
+
+                <div id="collapse{{ forloop.counter }}" class="collapse" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#commandsAccordion">
+                    <div class="card-body">
+                        <p>{{ cmd.description }}</p>
+                        
+                        <form class="command-form" id="form-{{ cmd_id }}">
+                            {% csrf_token %}
+                            <input type="hidden" name="command" value="{{ cmd.command }}">
+                            
+                            {% for arg in cmd.arguments %}
+                            <div class="form-group row mb-3">
+                                <label for="{{ cmd_id }}-{{ arg.name }}" class="col-sm-3 col-form-label">{{ arg.label }}</label>
+                                <div class="col-sm-9">
+                                    {% if arg.type == 'select' %}
+                                    <select class="form-control form-select" id="{{ cmd_id }}-{{ arg.name }}" name="arg_{{ arg.name }}">
+                                        {% for option in arg.options %}
+                                        <option value="{{ option }}" {% if option == arg.default %}selected{% endif %}>{{ option }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    {% elif arg.type == 'checkbox' %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="{{ cmd_id }}-{{ arg.name }}" name="arg_{{ arg.name }}" {% if arg.default %}checked{% endif %}>
+                                        <label class="form-check-label" for="{{ cmd_id }}-{{ arg.name }}">
+                                            {{ arg.label }}
+                                        </label>
+                                    </div>
+                                    {% elif arg.type == 'number' %}
+                                    <input type="number" class="form-control" id="{{ cmd_id }}-{{ arg.name }}" name="arg_{{ arg.name }}" value="{{ arg.default }}" {% if arg.required %}required{% endif %}>
+                                    {% elif arg.type == 'date' %}
+                                    <input type="date" class="form-control" id="{{ cmd_id }}-{{ arg.name }}" name="arg_{{ arg.name }}" {% if arg.required %}required{% endif %}>
+                                    {% else %}
+                                    <input type="{{ arg.type }}" class="form-control" id="{{ cmd_id }}-{{ arg.name }}" name="arg_{{ arg.name }}" value="{{ arg.default }}" {% if arg.required %}required{% endif %}>
+                                    {% endif %}
+                                    {% if arg.description %}
+                                    <small class="form-text text-muted">{{ arg.description }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                            
+                            <div class="form-group row">
+                                <div class="col-sm-9 offset-sm-3">
+                                    <button type="button" class="btn btn-primary execute-btn" data-command="{{ cmd_id }}">Execute</button>
+                                </div>
+                            </div>
+                        </form>
+                        
+                        <div class="output-section" id="output-{{ cmd_id }}" style="display: none;">
+                            <hr>
+                            <h5>
+                                <span class="running-indicator" id="running-{{ cmd_id }}"></span>
+                                Command Output
+                                <span class="command-status small" id="status-{{ cmd_id }}"></span>
+                                <button type="button" class="btn btn-sm btn-danger stop-btn float-end" id="stop-{{ cmd_id }}" style="display: none;">
+                                    <i class="fas fa-stop"></i> Stop Command
+                                </button>
+                            </h5>
+                            <div class="output-container">
+                                <div class="command-output" id="output-content-{{ cmd_id }}"></div>
+                                <div class="command-error" id="error-{{ cmd_id }}"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        const csrftoken = getCookie('csrftoken');
+        
+        function setupAjax(xhr) {
+            xhr.setRequestHeader("X-CSRFToken", csrftoken);
+        }
+        
+        document.querySelectorAll('.execute-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const commandId = this.dataset.command;
+                const form = document.getElementById(`form-${commandId}`);
+                const outputSection = document.getElementById(`output-${commandId}`);
+                const outputContent = document.getElementById(`output-content-${commandId}`);
+                const errorContent = document.getElementById(`error-${commandId}`);
+                const runningIndicator = document.getElementById(`running-${commandId}`);
+                const statusText = document.getElementById(`status-${commandId}`);
+                const stopButton = document.getElementById(`stop-${commandId}`);
+                
+                outputContent.innerHTML = '';
+                errorContent.innerHTML = '';
+                statusText.innerHTML = 'Running...';
+                statusText.classList.remove('text-success', 'text-danger');
+                runningIndicator.style.display = 'block';
+                stopButton.style.display = 'none';
+                
+                outputSection.style.display = 'block';
+                
+                const formData = new FormData(form);
+                
+                fetch('{% url "network_monitor:command_execute" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': csrftoken
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const commandId = data.command_id;
+                    
+                    if (data.can_be_stopped) {
+                        stopButton.style.display = 'block';
+                        stopButton.dataset.commandId = commandId;
+                    }
+                    
+                    pollCommandStatus(commandId, commandId, outputContent, errorContent, runningIndicator, statusText, stopButton);
+                })
+                .catch(error => {
+                    let errorMessage = 'Error executing command';
+                    if (error.response && error.response.error) {
+                        errorMessage = error.response.error;
+                    }
+                    errorContent.innerHTML = errorMessage;
+                    runningIndicator.style.display = 'none';
+                    statusText.innerHTML = 'Failed';
+                    statusText.classList.add('text-danger');
+                });
+            });
+        });
+        
+        document.querySelectorAll('.stop-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const commandId = this.dataset.commandId;
+                if (!commandId) return;
+                
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Stopping...';
+                
+                fetch(`{% url "network_monitor:command_stop" 'COMMAND_ID_PLACEHOLDER' %}`.replace('COMMAND_ID_PLACEHOLDER', commandId), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    this.innerHTML = '<i class="fas fa-check"></i> Stop Signal Sent';
+                })
+                .catch(error => {
+                    this.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Failed to Stop';
+                    this.disabled = false;
+                });
+            });
+        });
+        
+        function pollCommandStatus(commandId, targetId, outputContent, errorContent, runningIndicator, statusText, stopButton) {
+            const statusUrl = "{% url 'network_monitor:command_status' 'COMMAND_ID_PLACEHOLDER' %}".replace('COMMAND_ID_PLACEHOLDER', commandId);
+            
+            fetch(statusUrl)
+                .then(response => response.json())
+                .then(data => {
+                    outputContent.innerHTML = data.output.join('\n');
+                    
+                    if (data.is_completed) {
+                        if (data.error) {
+                            errorContent.innerHTML = data.error;
+                            statusText.innerHTML = 'Failed';
+                            statusText.classList.add('text-danger');
+                        } else if (data.is_stopped) {
+                            statusText.innerHTML = 'Stopped';
+                            statusText.classList.add('text-warning');
+                        } else {
+                            statusText.innerHTML = 'Completed';
+                            statusText.classList.add('text-success');
+                        }
+                        runningIndicator.style.display = 'none';
+                        if (stopButton) stopButton.style.display = 'none';
+                    } else {
+                        setTimeout(() => {
+                            pollCommandStatus(commandId, targetId, outputContent, errorContent, runningIndicator, statusText, stopButton);
+                        }, 1000);
+                    }
+                })
+                .catch(() => {
+                    errorContent.innerHTML = 'Error checking command status';
+                    runningIndicator.style.display = 'none';
+                });
+        }
+    });
+</script>
+{% endblock %} 

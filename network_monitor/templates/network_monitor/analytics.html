@@ -1,0 +1,269 @@
+{% extends 'network_monitor/base.html' %}
+
+{% block title %}Advanced Analytics - IDS{% endblock %}
+
+{% block page_title %}Advanced Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        padding: 15px;
+        height: 400px;
+    }
+    .chart-controls {
+        margin-bottom: 20px;
+    }
+    .chart-title {
+        font-size: 1.2rem;
+        margin-bottom: 15px;
+        color: #333;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row chart-controls">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <form id="chart-filter-form" class="form-inline">
+                    <div class="form-group mr-3">
+                        <label for="timeRange" class="mr-2">Time Range:</label>
+                        <select class="form-control" id="timeRange">
+                            <option value="7">Last 7 Days</option>
+                            <option value="14">Last 14 Days</option>
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary" id="updateCharts">Update Charts</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="chart-container">
+            <h3 class="chart-title">Security Events Timeline</h3>
+            <canvas id="timelineChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h3 class="chart-title">Event Types Distribution</h3>
+            <canvas id="eventTypeChart"></canvas>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h3 class="chart-title">Severity Distribution</h3>
+            <canvas id="severityChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h3 class="chart-title">Blocked IPs by Reason</h3>
+            <canvas id="blockedIpChart"></canvas>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h3 class="chart-title">Alert Status</h3>
+            <canvas id="alertStatusChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="chart-container">
+            <h3 class="chart-title">Top 10 Attack Sources</h3>
+            <canvas id="topAttackersChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const charts = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+    const timeRange = parseInt(document.getElementById('timeRange').value);
+    
+    initializeTimelineChart(timeRange);
+    initializeEventTypeChart();
+    initializeSeverityChart();
+    initializeBlockedIpChart();
+    initializeAlertStatusChart();
+    initializeTopAttackersChart();
+    
+    document.getElementById('updateCharts').addEventListener('click', function() {
+        const newTimeRange = parseInt(document.getElementById('timeRange').value);
+        updateTimelineChart(newTimeRange);
+    });
+});
+
+// Helper function to convert Chart.js v2 options to v3 format
+function convertChartOptionsToV3(data) {
+    // Create a deep copy to avoid modifying the original
+    const result = JSON.parse(JSON.stringify(data));
+    
+    // If options exist
+    if (result.options) {
+        // Convert scales configuration
+        if (result.options.scales) {
+            // Handle xAxes
+            if (result.options.scales.xAxes && result.options.scales.xAxes.length) {
+                result.options.scales.x = {
+                    ...result.options.scales.xAxes[0]
+                };
+                delete result.options.scales.xAxes;
+            }
+            
+            // Handle yAxes
+            if (result.options.scales.yAxes && result.options.scales.yAxes.length) {
+                result.options.scales.y = {
+                    ...result.options.scales.yAxes[0]
+                };
+                delete result.options.scales.yAxes;
+            }
+        }
+    }
+    
+    return result;
+}
+
+function initializeTimelineChart(days) {
+    fetch(`{% url "network_monitor:analytics" %}?format=json&chart=timeline&days=${days}`)
+        .then(response => response.json())
+        .then(data => {
+            const convertedData = convertChartOptionsToV3(data);
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            charts.timeline = new Chart(ctx, {
+                type: 'line',
+                data: convertedData.data || convertedData.datasets ? {
+                    labels: convertedData.labels,
+                    datasets: convertedData.datasets
+                } : convertedData.data,
+                options: convertedData.options || {}
+            });
+        });
+}
+
+function updateTimelineChart(days) {
+    fetch(`{% url "network_monitor:analytics" %}?format=json&chart=timeline&days=${days}`)
+        .then(response => response.json())
+        .then(data => {
+            const convertedData = convertChartOptionsToV3(data);
+            charts.timeline.data.labels = convertedData.labels;
+            charts.timeline.data.datasets = convertedData.datasets;
+            charts.timeline.options = convertedData.options || {};
+            charts.timeline.update();
+        });
+}
+
+function initializeEventTypeChart() {
+    fetch('{% url "network_monitor:analytics" %}?format=json&chart=event_type')
+        .then(response => response.json())
+        .then(data => {
+            const convertedData = convertChartOptionsToV3(data);
+            const ctx = document.getElementById('eventTypeChart').getContext('2d');
+            charts.eventType = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: convertedData.labels,
+                    datasets: convertedData.datasets
+                },
+                options: convertedData.options || {}
+            });
+        });
+}
+
+function initializeSeverityChart() {
+    fetch('{% url "network_monitor:analytics" %}?format=json&chart=severity')
+        .then(response => response.json())
+        .then(data => {
+            const convertedData = convertChartOptionsToV3(data);
+            const ctx = document.getElementById('severityChart').getContext('2d');
+            charts.severity = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: convertedData.labels,
+                    datasets: convertedData.datasets
+                },
+                options: convertedData.options || {}
+            });
+        });
+}
+
+function initializeBlockedIpChart() {
+    fetch('{% url "network_monitor:analytics" %}?format=json&chart=blocked_ip')
+        .then(response => response.json())
+        .then(data => {
+            const convertedData = convertChartOptionsToV3(data);
+            const ctx = document.getElementById('blockedIpChart').getContext('2d');
+            charts.blockedIp = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: convertedData.labels,
+                    datasets: convertedData.datasets
+                },
+                options: convertedData.options || {}
+            });
+        });
+}
+
+function initializeAlertStatusChart() {
+    fetch('{% url "network_monitor:analytics" %}?format=json&chart=alert_status')
+        .then(response => response.json())
+        .then(data => {
+            const convertedData = convertChartOptionsToV3(data);
+            const ctx = document.getElementById('alertStatusChart').getContext('2d');
+            charts.alertStatus = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: convertedData.labels,
+                    datasets: convertedData.datasets
+                },
+                options: convertedData.options || {}
+            });
+        });
+}
+
+function initializeTopAttackersChart() {
+    fetch('{% url "network_monitor:analytics" %}?format=json&chart=top_attackers')
+        .then(response => response.json())
+        .then(data => {
+            const convertedData = convertChartOptionsToV3(data);
+            const ctx = document.getElementById('topAttackersChart').getContext('2d');
+            
+            // horizontalBar is replaced with bar chart + indexAxis: 'y' in Chart.js v3
+            charts.topAttackers = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: convertedData.labels,
+                    datasets: convertedData.datasets
+                },
+                options: {
+                    ...convertedData.options,
+                    indexAxis: 'y'  // This makes a horizontal bar chart in v3
+                }
+            });
+        });
+}
+</script>
+{% endblock %} 

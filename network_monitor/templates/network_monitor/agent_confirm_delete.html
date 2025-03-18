@@ -1,0 +1,43 @@
+{% extends 'network_monitor/base.html' %}
+
+{% block title %}Delete Agent - {{ agent.name }} - IDS{% endblock %}
+
+{% block page_title %}Delete Agent: {{ agent.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 offset-md-3">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5><i class="bi bi-exclamation-triangle-fill"></i> Confirm Deletion</h5>
+            </div>
+            <div class="card-body">
+                <p class="lead">Are you sure you want to delete the agent <strong>{{ agent.name }}</strong>?</p>
+                
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-circle"></i> This action cannot be undone. All data associated with this agent will be permanently deleted, including:
+                    <ul>
+                        <li>Agent configuration</li>
+                        <li>Collected logs</li>
+                        <li>Monitoring history</li>
+                    </ul>
+                </div>
+                
+                <p>Please note: This will not remove the agent software from the endpoint. If the agent is still running, it may attempt to reconnect with a new identity.</p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'network_monitor:agent_detail' agent.id %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> Delete Agent
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
